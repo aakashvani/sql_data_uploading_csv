@@ -1,0 +1,81 @@
+import pandas as pd
+from sqlalchemy import create_engine, text
+import urllib.parse
+import logging
+
+# Step 1: Define file path and database connection details
+file_path = r"C:\Users\InAakash155\Desktop\Synergy\Synergy 371.03 - Payments at CPT Level_01012023_07312024.xlsx"
+sheet_name='Synergy 371.03 - Payments at CP'
+database_type = 'postgresql'  # Change to your database type: 'mysql', 'postgresql', 'sqlite', etc.
+user = 'Pawan'
+password = 'Secure@2323$'
+host = 'scale-health-postgres.postgres.database.azure.com'  # Example: 'localhost'
+database_name = 'Synergy Ortho'
+schema_name='payments'
+table_name = "payments_at_cpt_level"
+encoded_password = urllib.parse.quote(password)
+chunk_size = 10000
+
+
+# Create the database engine
+engine = create_engine(f'{database_type}://{user}:{encoded_password}@{host}/{database_name}', connect_args={'options': f'-c search_path={schema_name}'})
+print(engine)
+
+#to check connection
+try:
+    with engine.connect() as connection:
+        next_step = f'SELECT count(*) FROM "{schema_name}"."{table_name}"'
+        query = text(next_step)
+        result = connection.execute(query)
+        print(result)
+        for row in result:
+            print(f"Connection successful: {row}")
+except Exception as e:
+    print(f"Connection failed: {e}")
+#to update data
+# Define chunk size
+# chunk_size = 25
+# skip_rows = 0
+
+# # Iterate over chunks
+# while True:
+#     # Read chunk of data
+#     chunk = pd.read_excel(file_path, skiprows=skip_rows, nrows=chunk_size, header=1, sheet_name=sheet_name)
+#     print(chunk.head())
+#     chunk.to_sql(name=table_name, con=engine, if_exists='replace', index=False, schema=schema_name)
+#     # Check if chunk is empty (end of file)
+#     if chunk.empty:
+#         break
+# Define chunk size and initial skip rows
+chunk_size = 20000  # Adjust chunk size based on your memory and performance requirements
+skip_rows = 1
+counter=0
+while True:
+    # Read chunk of data from Excel
+    # columns=['facility', 'rendering_Provider', 'CPT_Code', 'Claim_Patient_Acct_No',
+    #    'Claim_Date', 'Service_Date','Appointment_Provider_Name','Department_Name','Facility_Name','Facility_POS','Primary_Payer_Name','Rendering_Provider_Name','Resource_Provider_Name','Claim_No','Claim_Status','Claim_Status_Group_Name','CPT_Code_Description','CPT_Status','Visit_Status','Visit_Type','Group_Code','Reason_Code','Code_Type','CSA_Code','Remark_Code','Description','Payment_ID','Claim_Charges','Payment','Contractual_Adjustment','Payer_Withheld','Claim_Balance','Denial_Amount']
+    columns=['facility',  'rendering_provider',  'facility_name', 'facility_pos', 'rendering_provider_name', 'appointment_servicing_provider', 'resource_provider_name', 'created_by_name', 'posted_by_user', 'patient_name','patient_acct_no', 'payer_name', 'service_date', 'claim_date', 'payment_date', 'payment_check_date', 'payment_deposit_date', 'payment_eob_date', 'payment_posted_date', 'payment_check_no', 'payment_type', 'payer_type', 'claim_no','cpt_code', 'cpt_description', 'start_date_of_service', 'end_date_of_service', 'cpt_group_name', 'modifier_1', 'modifier_2', 'modifier_3', 'modifier_4', 'icd1_code', 'icd1_name', 'icd2_code', 'icd2_name', 'icd3_code', 'icd3_name', 'icd4_code', 'icd4_name', 'payment_id', 'payment', 'payer_payment', 'patient_payment', 'contractual_adjustment', 'payer_withheld']
+    # if counter==0:
+    #     chunk = pd.read_excel(file_path, skiprows=skip_rows, nrows=chunk_size, header=1, sheet_name=sheet_name)
+    # else:
+    chunk = pd.read_excel(file_path, skiprows=skip_rows, nrows=chunk_size, header=None, sheet_name=sheet_name)
+    chunk.columns=columns
+    if chunk.empty:
+        break
+    print(chunk.head())
+    # Write chunk to SQL table
+    try:
+        chunk.to_sql(name=table_name, con=engine, if_exists='append', index=False, schema=schema_name)
+    except Exception as e:
+        logging.error(f"Error processing chunk: {e}")
+        engine.dispose()  # Dispose of the engine to reset the state
+        
+
+    # Update skip_rows for the next chunk
+    skip_rows += chunk_size
+
+    # Print progress or perform additional processing
+    print(f"Processed {skip_rows} rows")
+    counter+=1
+# Optionally, print a completion message
+print("Data migration complete.")
